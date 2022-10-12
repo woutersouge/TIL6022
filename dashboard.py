@@ -1,10 +1,14 @@
 import streamlit as st
 import json
 import plotly.express as px
+import pandas as pd
+
+dataset = 'TILL6022_Emission_Dataset.csv'
+df = pd.read_csv(dataset, delimiter=',', encoding='ISO-8859-1')
 
 #Description
 sidebar = st.sidebar
-sidebar.title('Streamlit example')
+sidebar.title('Carbon total emission global data')
 sidebar.write(
 """
 This application is a simple example of dashboarding for visualising data.  
