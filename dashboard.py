@@ -4,12 +4,20 @@ import plotly.express as px
 import pandas as pd
 import geopandas as gpd
 import geojson
-import folium
-
+import numpy as np
 #Description
 sidebar = st.sidebar
-sidebar.title('Streamlit example')
-sidebar.write('Test')
+sidebar.title('Carbon Emissions in Transport')
+sidebar.write('Test 123')
+given_time = st.selectbox('Select time period to visualise', ['Day','Month','Quartile','Year'])
+if given_time == 'Day':
+    date_filt = 'D'
+elif given_time == 'Month':
+    date_filt = 'MS'
+elif given_time == 'Quartile':
+    date_filt = 'QS'
+elif given_time == 'Year':
+    date_filt = 'Y'
 # """
 # This application is a simple example of dashboarding for visualising data.  
 # You can find the streamlit cheatsheet here: https://share.streamlit.io/daniellewisdl/streamlit-cheat-sheet/app.py  
@@ -33,15 +41,18 @@ sidebar.write('Test')
 #Open dataset
 dataset = 'TILL6022_Emission_Dataset.csv'
 df = pd.read_csv(dataset, delimiter=',', encoding='ISO-8859-1')
-vf = df[df.sector == 'Total']
-#Open Json of world map
+df.date = pd.to_datetime(df.date)
+df_filt = df.groupby(['country','sector']).resample(date_filt,on='date').sum()    #D for Day, MS for month, QS to quarter, Y for year
+df_filt = df_filt.reset_index()
+df_filt.date = np.datetime_as_string(df_filt.date, unit='D')
+
 with open("B:\Documenten\TU_Delft\Master\Module_1\Python\Assignment\TIL6022\countries.geojson") as f:
     counties = geojson.load(f)
 gdf = gpd.GeoDataFrame.from_features(counties["features"], crs=4326)
 mask = gdf.area >2    # Function to remove smaller countries to speed up 
 gdf_selec = gdf.loc[mask]
 
-fig = px.choropleth(vf, locations= "country",
+fig = px.choropleth(df_filt[df_filt.sector =='Domestic Aviation'], locations= "country",
                     locationmode= "country names",
                     color="co2",
                     #hover_name="country",
