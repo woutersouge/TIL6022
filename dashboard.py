@@ -70,12 +70,15 @@ fig = px.choropleth(df_filt[df_filt.sector =='Domestic Aviation'], locations= "c
                     animation_frame="date"
                     #color_continuous_scale="Blues_r"
                     )
+fig.update_geos(fitbounds=given_country)     
 fig.update_layout(
     title_text = "Life Expectancy",
     geo = dict(
         showframe = False,
         showcoastlines = True,
         projection_type = "equirectangular"        
-    )
+    ),
+    height=300, 
+    margin={"r":0,"t":0,"l":0,"b":0}
 )
 st.plotly_chart(fig)
