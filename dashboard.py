@@ -1,25 +1,27 @@
 import streamlit as st
-
 import json
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 import geopandas as gpd
 import geojson
+import folium
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import datetime
+from shapely.geometry import Polygon, mapping
 from calendar import month
+from calendar import month_name as mn
 from matplotlib import animation
+import seaborn as sns
+from statsmodels.nonparametric.kernel_regression import KernelReg
+from datetime import datetime
+
 #Description
 #Open dataset
 dataset = 'TILL6022_Emission_Dataset.csv'
 df = pd.read_csv(dataset, delimiter=',', encoding='ISO-8859-1') #,parse_dates = ['date']
 country_bb = pd.read_csv('country_bb.csv', delimiter=',', encoding='ISO-8859-1')
-
-df.date = pd.to_datetime(df.date)
-df_filt = df.groupby(['country','sector']).resample('MS',on='date').sum()    #D for Day, MS for month, QS to quarter, Y for year
-df_filt = df_filt.reset_index()
-df_filt.date = np.datetime_as_string(df_filt.date, unit='D')
 
 # Side bar code
 sidebar = st.sidebar
@@ -40,6 +42,15 @@ given_country = sidebar.selectbox('Select country to visualise', df.country.uniq
 
 default_sector = int(np.where(df['sector'].unique() == 'Total')[0])
 given_sector = sidebar.selectbox('Select sector to visualise', df.sector.unique(), index = default_sector)
+
+
+missing_EU = ['Belgium','Finland','Estonia','Austria','Luxembourg','Greece','Malta','Netherlands','Hungary','Bulgaria','Latvia','Lithuania','Slovenia','Croatia','Ireland','Portugal','Slovakia','Denmark','Polan']
+df.date = pd.to_datetime(df.date)
+df_filt = df.groupby(['country','sector']).resample(date_filt,on='date').sum()    #D for Day, MS for month, QS to quarter, Y for year
+df_filt = df_filt.reset_index()
+df_filt.date = np.datetime_as_string(df_filt.date, unit='D')
+
+
 
 zoom_factor = 3
 #Drop down menus
@@ -86,8 +97,8 @@ transport_data2 = transport_data[(transport_data.year == '2019') | (transport_da
 # transport_data["date"].str.split("-", expand = True)
 fig_transport = go.Figure()
 # add trace
-Years = ['2019', '2020']
-Countries = ['UK', 'US', 'China', 'EU27 & UK', 'France', 'Germany', 'India', 'Italy', 'Japan', 'Russia', 'Spain']
+Years = transport_data.year.unique()
+Countries = transport_data.country.unique()
 months = list(transport_data.month.unique())
 
 ### Figures
@@ -120,32 +131,36 @@ st.plotly_chart(fig_world, use_container_width=True)
 fig_transport = make_subplots(rows = 4, 
                     cols = 1,
                     subplot_titles = ('Total', 'International Aviation', 'Domestic Aviation', 'Ground Transport'))
-
+# for i in Years[1]:
+trans_tot = transport_data[(transport_data.country == given_country)].groupby(
+        ['date'],as_index = False).agg({'country':'first','co2':'sum','year':'first','month':'first','day':'first','same_year':'first'})
+trans_int_av = transport_data[(transport_data.country == given_country)
+                & (transport_data.sector == 'International Aviation')]
+trans_do_av = transport_data[(transport_data.country == given_country)
+                & (transport_data.sector == 'Domestic Aviation')]
+trans_gr_tr = transport_data[(transport_data.country == given_country)
+                & (transport_data.sector == 'Ground Transport')]
 for i in Years:
-        z = transport_data[(transport_data.country == given_country) & (transport_data.year == i)]
-        Int_Av = transport_data2[(transport_data2.country == given_country) & (transport_data2.year == i) & (transport_data2.sector == 'International Aviation')]
-        Do_Av = transport_data2[(transport_data2.country == given_country) & (transport_data2.year == i) & (transport_data2.sector == 'Domestic Aviation')]
-        Gr_Trans = transport_data2[(transport_data2.country == given_country) & (transport_data2.year == i) & (transport_data2.sector == 'Ground Transport')]
         lop = fig_transport.add_traces(
                 [
-                    go.Scatter(x=list(z.same_year),
-                        y=list(z.co2),
-                        name= given_country + i,
-                        visible = True),        
-                    go.Scatter(x=list(Int_Av.same_year),
-                            y=list(Int_Av.co2),
-                            name= 'International Aviation' + given_country + i,
-                            visible = True),
-                    go.Scatter(x=list(Do_Av.same_year),
-                            y=list(Do_Av.co2),
-                            name= 'Domestic Aviation' + given_country + i,
-                            visible = True),
-                    go.Scatter(x=list(Gr_Trans.same_year),
-                            y=list(Gr_Trans.co2),
-                            name= 'Ground Transport' + given_country + i,
-                            visible = True)
+                        go.Scatter(x=list(trans_tot[(trans_tot.year == i)].same_year),
+                                y=list(trans_tot[(trans_tot.year == i)].co2),
+                                name= 'Total' + given_country + i,
+                                visible = True), 
+                        go.Scatter(x=list(trans_int_av[(trans_int_av.year == i)].same_year),
+                                y=list(trans_int_av[(trans_int_av.year == i)].co2),
+                                name= 'International Aviation' + given_country + i,
+                                visible = True),
+                        go.Scatter(x=list(trans_do_av[(trans_do_av.year == i)].same_year),
+                                y=list(trans_do_av[(trans_do_av.year == i)].co2),
+                                name= 'Domestic Aviation' + given_country + i,
+                                visible = True),
+                        go.Scatter(x=list(trans_gr_tr[(trans_gr_tr.year == i)].same_year),
+                                y=list(trans_gr_tr[(trans_gr_tr.year == i)].co2),
+                                name= 'Ground Transport' + given_country + i,
+                                visible = True)
                 ], rows=list(range(1,5)), cols=[1,1,1,1]
-                )
+        )
 
 fig_transport.update_layout(
     height = 1500
@@ -167,3 +182,119 @@ fig_transport['layout']['xaxis4']['title']='Date'
 
 
 st.plotly_chart(fig_transport, use_container_width=True)
+
+Delta_Country = []
+Date_country = []
+Date_country_max = []
+Percentage_Delta = []
+Delta_Country_Do = []
+Date_country_Do = []
+Date_country_max_Do = []
+Percentage_Delta_Do = []
+Delta_Country_Trans = []
+Date_country_Trans = []
+Date_country_max_Trans = []
+Percentage_Delta_Trans = []
+Delta_Country_Int = []
+Date_country_Int = []
+Date_country_max_Int = []
+Percentage_Delta_Int = []
+
+# for i in Years:
+Delta_Total = trans_tot[(trans_tot.country == given_country) & (trans_tot.year == '2020')]
+diff_list = []
+for d in range(len(Delta_Total)-1):
+        Diff = abs(Delta_Total['co2'].iloc[d] - Delta_Total['co2'].iloc[d+1])
+        Co2Value = Delta_Total['co2'].iloc[d-1]
+        diff_list.append(Diff)
+        Date_country.append(Delta_Total.iloc[d]['date'])
+Max_Diff = max(diff_list)
+percent_Delta = ("%g" % round((Max_Diff/Co2Value)*100,1))
+# print(Meanvalue)
+# print('This is the max diff:' , Max_Diff, k)
+index_maxvalue = diff_list.index(Max_Diff)
+# print("Date at which delta is max: ", Date_country[index_maxvalue])
+maxDATE = Date_country[index_maxvalue]
+Delta_Country.append(Max_Diff)
+Date_country_max.append(maxDATE)
+Percentage_Delta.append(percent_Delta)
+# print(Delta_Country)
+
+ 
+
+
+# for i in Years:
+Do_Av = trans_do_av[(trans_do_av.country == given_country) & (trans_do_av.year == '2020')]
+diff_list_Do = []
+for d in range(len(Do_Av)-1):
+        Diff = abs(Do_Av['co2'].iloc[d] - Do_Av['co2'].iloc[d+1])
+        Co2Value_Do = Do_Av['co2'].iloc[d-1]
+        diff_list_Do.append(Diff)
+        Date_country_Do.append(Do_Av.iloc[d]['date'])
+Max_Diff_Do = max(diff_list_Do)
+percent_Delta_Do = round((Max_Diff_Do/Co2Value_Do)*100,1)
+# print('This is the max diff:' , Max_Diff_Do, k)
+index_maxvalue_Do = diff_list_Do.index(Max_Diff_Do)
+maxDATE_Do = Date_country_Do[index_maxvalue_Do]
+Delta_Country_Do.append(Max_Diff_Do)
+Date_country_max_Do.append(maxDATE_Do)
+Percentage_Delta_Do.append(percent_Delta_Do)
+# print(Delta_Country)
+
+
+# for i in Years:
+Gr_Trans = trans_gr_tr[(trans_gr_tr.country == given_country) & (trans_gr_tr.year == '2020')]
+diff_list_Trans = []
+for d in range(len(Gr_Trans)-1):
+        Diff = abs(Gr_Trans['co2'].iloc[d] - Gr_Trans['co2'].iloc[d+1])
+        Co2Value_Trans = Gr_Trans['co2'].iloc[d-1]
+        diff_list_Trans.append(Diff)
+        Date_country_Trans.append(Gr_Trans.iloc[d]['date'])
+Max_Diff_Trans = max(diff_list_Trans)
+Percent_Delta_Trans = round((Max_Diff_Trans/Co2Value_Trans)*100, 1)
+# print('This is the max diff:' , Max_Diff_Trans, k)
+Delta_Country_Trans.append(Max_Diff_Trans)
+index_maxvalue_Trans = diff_list_Trans.index(Max_Diff_Trans)
+maxDATE_Trans = Date_country_Trans[index_maxvalue_Trans]
+Date_country_max_Trans.append(maxDATE_Trans)
+Percentage_Delta_Trans.append(Percent_Delta_Trans)
+# print(Delta_Country)
+
+
+
+# for i in Years:
+Int_Av = trans_int_av[(trans_int_av.country == given_country) & (trans_int_av.year == '2020')]
+diff_list_Int = []
+for d in range(len(Int_Av)-1):
+        Diff = abs(Int_Av['co2'].iloc[d] - Int_Av['co2'].iloc[d+1])
+        Co2Value_Int = Int_Av['co2'].iloc[d-1]
+        diff_list_Int.append(Diff)
+        Date_country_Int.append(Int_Av.iloc[d]['date'])
+Max_Diff_Int = max(diff_list_Int)
+Percent_Delta_Int = round((Max_Diff_Int/Co2Value_Int)*100, 1)
+Delta_Country_Int.append(Max_Diff_Int)
+index_maxvalue_Int = diff_list_Int.index(Max_Diff_Int)
+maxDATE_Int = Date_country_Int[index_maxvalue_Int]
+Date_country_max_Int.append(maxDATE_Int)
+Percentage_Delta_Int.append(Percent_Delta_Int)
+# print(Delta_Country)
+
+DeltaTable = pd.DataFrame(
+    {'Country': given_country,
+     'Biggest Delta 2020': Delta_Country,
+     'Percentage biggest Delta 2020': Percentage_Delta,
+     'Date biggest Delta 2020': Date_country_max,
+     'Biggest Ground Transportation Delta 2020': Delta_Country_Trans,
+     'Percentage biggest Ground Transportation Delta 2020': Percentage_Delta_Trans,
+     'Date biggest Ground Transportation Delta 2020': Date_country_max_Trans,
+     'Biggest Domestic Aviation Delta 2020': Delta_Country_Do,
+     'Percentage biggest Domestic Aviation Delta 2020': Percentage_Delta_Do,
+     'Date biggest Domestic Aviation Delta 2020': Date_country_max_Do,
+     'Biggest International Aviation Delta 2020': Delta_Country_Int,
+     'Percentage biggest International Aviation Delta 2020': Percentage_Delta_Int,
+     'Date biggest International Aviation Delta 2020': Date_country_max_Int
+    })
+
+DeltaTable
+
+DeltaTable.style.background_gradient(cmap='Blues')
