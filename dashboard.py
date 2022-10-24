@@ -1,40 +1,46 @@
 import streamlit as st
-import json
+#  import json
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
-import geopandas as gpd
-import geojson
-import folium
+# import geopandas as gpd
+# import geojson
+# import folium
 import numpy as np
-import datetime
-from shapely.geometry import Polygon, mapping
-from calendar import month
-from calendar import month_name as mn
-from matplotlib import animation
-import seaborn as sns
-from statsmodels.nonparametric.kernel_regression import KernelReg
-from datetime import datetime
+# import datetime
+# from shapely.geometry import Polygon, mapping
+# from calendar import month
+# from calendar import month_name as mn
+# from matplotlib import animation
+# import seaborn as sns
+# from statsmodels.nonparametric.kernel_regression import KernelReg
+# from datetime import datetime
 
 #Description
 #Open dataset
-dataset = 'TILL6022_Emission_Dataset.csv'
+
+dataset = 'B:/Documenten/TU_Delft/Master/Module_1/Python/Assignment/TIL6022/TILL6022_Emission_Dataset.csv'
+bounding_boxes = 'B:/Documenten/TU_Delft/Master/Module_1/Python/Assignment/TIL6022/country_bb.csv'
 df = pd.read_csv(dataset, delimiter=',', encoding='ISO-8859-1') #,parse_dates = ['date']
-country_bb = pd.read_csv('country_bb.csv', delimiter=',', encoding='ISO-8859-1')
+country_bb = pd.read_csv(bounding_boxes, delimiter=',', encoding='ISO-8859-1')
 
 # Side bar code
 sidebar = st.sidebar
 sidebar.title('Carbon Emissions in Transport')
-given_time = sidebar.selectbox('Select time period to visualise', ['Day','Month','Quartile','Year'])
+given_time = sidebar.selectbox('Select time period to visualise', ['Day','Week','Month','Quartile','Year'])
+
 if given_time == 'Day':
     date_filt = 'D'
+elif given_time == 'Week':
+    date_filt = 'W-MON'
 elif given_time == 'Month':
     date_filt = 'MS'
 elif given_time == 'Quartile':
     date_filt = 'QS'
 elif given_time == 'Year':
     date_filt = 'Y'
+    
 sidebar.write('Test 123')
 
 default_country = int(np.where(df['country'].unique() == 'WORLD')[0])
@@ -45,13 +51,31 @@ given_sector = sidebar.selectbox('Select sector to visualise', df.sector.unique(
 
 
 missing_EU = ['Belgium','Finland','Estonia','Austria','Luxembourg','Greece','Malta','Netherlands','Hungary','Bulgaria','Latvia','Lithuania','Slovenia','Croatia','Ireland','Portugal','Slovakia','Denmark','Polan']
-df.date = pd.to_datetime(df.date)
+df_dates = pd.to_datetime(df['date'])
+df.date = df_dates
 df_filt = df.groupby(['country','sector']).resample(date_filt,on='date').sum()    #D for Day, MS for month, QS to quarter, Y for year
 df_filt = df_filt.reset_index()
+box_pts = 4
+box = np.ones(box_pts)/box_pts
+smooth_data = np.convolve(df_filt.co2, box, mode='same')
+print(smooth_data)
+df_filt.insert(4, "co2_smooth", smooth_data)
+df_filt["smooth"] = smooth_data
+df_filt = df_filt.set_index('date')
+date_min = df_filt.index.min()
+date_max = df_filt.index.max()
+index_min = df_filt.index == date_min
+index_max = df_filt.index == date_max
+df_filt = df_filt.reset_index()
+df_dates = df_dates.to_numpy()
 df_filt.date = np.datetime_as_string(df_filt.date, unit='D')
-
-
-
+index_min_1 = pd.Series(df_filt.index[index_min])
+index_min_2 = pd.Series(df_filt.index[index_min]+1)
+index_max_1 = pd.Series(df_filt.index[index_max])
+index_max_2 = pd.Series(df_filt.index[index_max]-1)
+index_series = pd.Index(index_max_1.append([index_max_2,index_min_1,index_min_2], ignore_index=True))
+df_filt = df_filt.drop(index_series, axis=0, inplace= True)
+print(df_filt)
 zoom_factor = 3
 #Drop down menus
 
@@ -83,8 +107,9 @@ elif len(df_filt[df_filt.sector == given_sector].country.unique())>1:
 
 
 # filter dataset on Transport sectors: 'International Shipping' or 'International Aviation' or 'Domestic Aviation' or 'Ground Transport'
-transport_datas = ['International Shipping', 'International Aviation', 'Domestic Aviation', 'Ground Transport']
-transport_data =  df_filt[df_filt.sector.isin(transport_datas)]
+transport_data = df_filt
+print(transport_data)
+transport_data =  transport_data[transport_data.sector.isin(['International Shipping', 'International Aviation', 'Domestic Aviation', 'Ground Transport'])]
 
 # Transport_not_World = transport_data[transport_data.country != 'WORLD'].groupby(['country', 'date']).sum()
 
