@@ -39,7 +39,7 @@ given_country = sidebar.selectbox('Select country to visualise', df.country.uniq
 default_sector = transport_sectors.index('Total')
 given_sector = sidebar.selectbox('Select sector to visualise', transport_sectors, index = default_sector)
 df.date = pd.to_datetime(df['date'])
-df_filt = df.groupby(['country','sector']).resample(date_filt,on='date').sum()
+df_filt = df.groupby(['country','sector']).resample(date_filt,on='date').mean()
 df_filt = df_filt.reset_index()
 box_pts = 4
 box = np.ones(box_pts)/box_pts
